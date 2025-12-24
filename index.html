@@ -38,7 +38,7 @@
                 </form>
             </div>
         </div>
-        <script type="module">1769217025001
+        <script type="module">
             const displayRpd = document.getElementById("display-rpd");
             const displayHpr = document.getElementById("display-hpr");
             const displayMph = document.getElementById("display-mph");
@@ -50,7 +50,7 @@
             const zeroMode = document.getElementById("zero-mode");
             const hourFormat = document.getElementById("hour-format");
             const resetButton = document.getElementById("reset-button");
-            const timeOutput = document.getElementById("time-output");
+            const timeDisplay = document.getElementById("time-output");
             const clockCanvas = document.getElementById("clock-canvas");
             const clockCanvasContext = clockCanvas.getContext("2d");
             roundsPerDay.addEventListener("input", updateConfigDisplay);
@@ -68,16 +68,75 @@
                     updateClockCanvas();
                 }
             }();
+
+            function updateConfigDisplay() {
+                displayRpd.textContent = roundsPerDay.value;
+                displayHpr.textContent = hoursPerRound.value;
+                displayMph.textContent = minutesPerHour.value;
+                displaySpm.textContent = secondPerMinute.value;
+            }
             function expi(theta) {
                 return [Math.cos(theta), Math.sin(theta)];
             }
-            function updateClockCanvas() {
-                clockCanvasContext.clearRect(0, 0, clockCanvas.width, clockCanvas.height);
+            function drawDial() {
+                // draw circle
                 clockCanvasContext.strokeStyle = "#FFFFFF";
                 clockCanvasContext.lineWidth = 10;
                 clockCanvasContext.beginPath();
                 clockCanvasContext.arc(clockCanvas.width / 2, clockCanvas.height / 2, 0.95 * (clockCanvas.width / 2), 0, 2 * Math.PI); //
                 clockCanvasContext.stroke();
+
+                // draw clock dial
+                for (const i of new Array(+hoursPerRound.value).keys()) {
+                    const { 0: y, 1: x } = expi(-(i / hoursPerRound.value) * 2 * Math.PI);
+                    const r = 0.84 * (clockCanvas.width / 2);
+                    clockCanvasContext.font = "210px sans-serif";
+                    clockCanvasContext.fillStyle = "#FFFFFF";
+                    clockCanvasContext.textAlign = "center";
+                    clockCanvasContext.textBaseline = "middle";
+                    const n = zeroMode.checked ? i : (i || +hoursPerRound.value);
+                    const nStr = { decimal: `${n}`, "n-base-up": n.toString(36).toUpperCase(), "n-base-low": n.toString(36).toLowerCase() }[hourFormat.value];
+                    clockCanvasContext.fillText(nStr, clockCanvas.width / 2 - r * x, 30 + clockCanvas.width / 2 - r * y);
+                }
+                for (const i of new Array(+minutesPerHour.value).keys()) {
+                    const { 0: y, 1: x } = expi(-(i / minutesPerHour.value) * 2 * Math.PI);
+                    const innerR = 0.92 * (clockCanvas.width / 2);
+                    const outerR = 0.95 * (clockCanvas.width / 2);
+                    clockCanvasContext.beginPath();
+                    clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
+                    clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
+                    clockCanvasContext.lineWidth = 25;
+                    clockCanvasContext.stroke();
+                }
+                if (secondPerMinute.value !== minutesPerHour.value) {
+                    for (const i of new Array(+secondPerMinute.value).keys()) {
+                        const { 0: y, 1: x } = expi(-(i / secondPerMinute.value) * 2 * Math.PI);
+                        const innerR = 0.905 * (clockCanvas.width / 2);
+                        const outerR = 0.95 * (clockCanvas.width / 2);
+                        clockCanvasContext.beginPath();
+                        clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
+                        clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
+                        clockCanvasContext.lineWidth = 10;
+                        clockCanvasContext.stroke();
+                    }
+                }
+            }
+            function drawHand(p, length, lineWidth) {
+                const { 0: y, 1: x } = expi(-p * 2 * Math.PI);
+                const r = length * (clockCanvas.width / 2);
+                clockCanvasContext.beginPath();
+                clockCanvasContext.moveTo(clockCanvas.width / 2, clockCanvas.height / 2);
+                clockCanvasContext.lineTo(clockCanvas.width / 2 - r * x, clockCanvas.width / 2 - r * y);
+                clockCanvasContext.lineWidth = lineWidth;
+                clockCanvasContext.stroke();
+            }
+            function updateClockCanvas() {
+                // clear canvas
+                clockCanvasContext.clearRect(0, 0, clockCanvas.width, clockCanvas.height);
+
+                drawDial();
+
+                // draw clock hands
                 const now = new Date();
                 const beginningOfDay = new Date(now.getTime());
                 beginningOfDay.setUTCHours(0, 0, 0, 0);
@@ -89,80 +148,19 @@
                 p *= roundsPerDay.value;
                 const rounds = Math.floor(p);
                 p %= 1.0;
-                {
-                    const [y, x] = expi(-p * 2 * Math.PI);
-                    const r = 0.55 * (clockCanvas.width / 2);
-                    clockCanvasContext.beginPath();
-                    clockCanvasContext.moveTo(clockCanvas.width / 2, clockCanvas.height / 2);
-                    clockCanvasContext.lineTo(clockCanvas.width / 2 - r * x, clockCanvas.width / 2 - r * y);
-                    clockCanvasContext.lineWidth = 50;
-                    clockCanvasContext.stroke();
-                }
+                drawHand(p, 0.55, 50);
                 p *= hoursPerRound.value;
                 const hours = Math.floor(p);
                 p %= 1.0;
-                {
-                    const [y, x] = expi(-p * 2 * Math.PI);
-                    const r = 0.75 * (clockCanvas.width / 2);
-                    clockCanvasContext.beginPath();
-                    clockCanvasContext.moveTo(clockCanvas.width / 2, clockCanvas.height / 2);
-                    clockCanvasContext.lineTo(clockCanvas.width / 2 - r * x, clockCanvas.width / 2 - r * y);
-                    clockCanvasContext.lineWidth = 30;
-                    clockCanvasContext.stroke();
-                }
+                drawHand(p, 0.75, 30);
                 p *= minutesPerHour.value;
                 const minutes = Math.floor(p);
                 p %= 1.0;
                 const seconds = Math.floor(p * secondPerMinute.value);
-                {
-                    const [y, x] = expi(-p * 2 * Math.PI);
-                    const r = 0.85 * (clockCanvas.width / 2);
-                    clockCanvasContext.beginPath();
-                    clockCanvasContext.moveTo(clockCanvas.width / 2, clockCanvas.height / 2);
-                    clockCanvasContext.lineTo(clockCanvas.width / 2 - r * x, clockCanvas.width / 2 - r * y);
-                    clockCanvasContext.lineWidth = 15;
-                    clockCanvasContext.stroke();
-                }
-                timeOutput.textContent = `${(rounds * hoursPerRound.value + hours).toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-                for (const i of new Array(+hoursPerRound.value).keys()) {
-                    const [y, x] = expi(-(i / hoursPerRound.value) * 2 * Math.PI);
-                    const r = 0.84 * (clockCanvas.width / 2);
-                    clockCanvasContext.font = "210px sans-serif";
-                    clockCanvasContext.fillStyle = "#FFFFFF";
-                    clockCanvasContext.textAlign = "center";
-                    clockCanvasContext.textBaseline = "middle";
-                    const n = zeroMode.checked ? i : (i || +hoursPerRound.value);
-                    const nStr = { decimal: `${n}`, "n-base-up": n.toString(36).toUpperCase(), "n-base-low": n.toString(36).toLowerCase() }[hourFormat.value];
-                    clockCanvasContext.fillText(nStr, clockCanvas.width / 2 - r * x, 30 + clockCanvas.width / 2 - r * y);
-                }
-                for (const i of new Array(+minutesPerHour.value).keys()) {
-                    const [y, x] = expi(-(i / minutesPerHour.value) * 2 * Math.PI);
-                    const innerR = 0.93 * (clockCanvas.width / 2);
-                    const outerR = 0.95 * (clockCanvas.width / 2);
-                    clockCanvasContext.beginPath();
-                    clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
-                    clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
-                    clockCanvasContext.lineWidth = 25;
-                    clockCanvasContext.stroke();
-                }
-                if (secondPerMinute.value !== minutesPerHour.value) {
-                    for (const i of new Array(+secondPerMinute.value).keys()) {
-                        const [y, x] = expi(-(i / secondPerMinute.value) * 2 * Math.PI);
-                        const innerR = 0.89 * (clockCanvas.width / 2);
-                        const outerR = 0.95 * (clockCanvas.width / 2);
-                        clockCanvasContext.beginPath();
-                        clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
-                        clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
-                        clockCanvasContext.lineWidth = 10;
-                        clockCanvasContext.stroke();
-                    }
-                }
-            }
-            function updateConfigDisplay() {
-                displayRpd.textContent = roundsPerDay.value;
-                displayHpr.textContent = hoursPerRound.value;
-                displayMph.textContent = minutesPerHour.value;
-                displaySpm.textContent = secondPerMinute.value;
+                drawHand(p, 0.85, 15);
+
+                // set HH:MM:SS
+                timeDisplay.textContent = `${(rounds * hoursPerRound.value + hours).toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
             }
         </script>
     </body>
