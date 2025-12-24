@@ -32,7 +32,7 @@
                     <div><span>round(s) / day : </span><span id="display-rpd"></span><input id="rounds-per-day" type="range" min="1" max="8" value="2" style="width: 100%; margin: 0px;"></div>
                     <div><span>hour(s) / round : </span><span id="display-hpr"></span><input id="hours-per-round" type="range" min="1" max="32" value="12" style="width: 100%; margin: 0px;"></div>
                     <div><span>minute(s) / hour : </span><span id="display-mph"></span><input id="minutes-per-hour" type="range" min="1" max="128" value="60" style="width: 100%; margin: 0px;"></div>
-                    <div><span>second(s) / minute : </span><span id="display-spm"></span><input id="second-per-minute" type="range" min="1" max="128" value="60" style="width: 100%; margin: 0px;"></div>
+                    <div><span>second(s) / minute : </span><span id="display-spm"></span><input id="seconds-per-minute" type="range" min="1" max="128" value="60" style="width: 100%; margin: 0px;"></div>
                     <br>
                     <div><input id="reset-button" type="reset" value="Reset All Params"></div>
                 </form>
@@ -46,7 +46,7 @@
             const roundsPerDay = document.getElementById("rounds-per-day");
             const hoursPerRound = document.getElementById("hours-per-round");
             const minutesPerHour = document.getElementById("minutes-per-hour");
-            const secondPerMinute = document.getElementById("second-per-minute");
+            const secondsPerMinute = document.getElementById("seconds-per-minute");
             const zeroMode = document.getElementById("zero-mode");
             const hourFormat = document.getElementById("hour-format");
             const resetButton = document.getElementById("reset-button");
@@ -56,7 +56,7 @@
             roundsPerDay.addEventListener("input", updateConfigDisplay);
             hoursPerRound.addEventListener("input", updateConfigDisplay);
             minutesPerHour.addEventListener("input", updateConfigDisplay);
-            secondPerMinute.addEventListener("input", updateConfigDisplay);
+            secondsPerMinute.addEventListener("input", updateConfigDisplay);
             resetButton.addEventListener("mouseup", () => {
                 resetButton.click();
                 updateConfigDisplay();
@@ -73,7 +73,7 @@
                 displayRpd.textContent = roundsPerDay.value;
                 displayHpr.textContent = hoursPerRound.value;
                 displayMph.textContent = minutesPerHour.value;
-                displaySpm.textContent = secondPerMinute.value;
+                displaySpm.textContent = secondsPerMinute.value;
             }
             function expi(theta) {
                 return [Math.cos(theta), Math.sin(theta)];
@@ -108,9 +108,9 @@
                     clockCanvasContext.lineWidth = 25;
                     clockCanvasContext.stroke();
                 }
-                if (secondPerMinute.value !== minutesPerHour.value) {
-                    for (const i of new Array(+secondPerMinute.value).keys()) {
-                        const { 0: y, 1: x } = expi(-(i / secondPerMinute.value) * 2 * Math.PI);
+                if (secondsPerMinute.value !== minutesPerHour.value) {
+                    for (const i of new Array(+secondsPerMinute.value).keys()) {
+                        const { 0: y, 1: x } = expi(-(i / secondsPerMinute.value) * 2 * Math.PI);
                         const innerR = 0.905 * (clockCanvas.width / 2);
                         const outerR = 0.95 * (clockCanvas.width / 2);
                         clockCanvasContext.beginPath();
@@ -156,11 +156,11 @@
                 p *= minutesPerHour.value;
                 const minutes = Math.floor(p);
                 p %= 1.0;
-                const seconds = Math.floor(p * secondPerMinute.value);
+                const seconds = Math.floor(p * secondsPerMinute.value);
                 drawHand(p, 0.85, 15);
 
                 // set HH:MM:SS
-                timeDisplay.textContent = `${(rounds * hoursPerRound.value + hours).toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+                timeDisplay.textContent = `${(rounds * hoursPerRound.value + hours).toString().padStart((roundsPerDay.value * hoursPerRound.value).toString().length, "0")}:${minutes.toString().padStart((minutesPerHour.value - 1).toString().length, "0")}:${seconds.toString().padStart((secondsPerMinute.value - 1).toString().length, "0")}`;
             }
         </script>
     </body>
