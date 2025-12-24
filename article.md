@@ -1,3 +1,5 @@
+# 12時間表示，時計。
+
 [TUT (powered by LinuxClub) Advent Calendar 2025](https://adventar.org/calendars/12000) 24 日目の記事(?)です (間に合いませんでした) 。
 
 ## 12時間表記や時計の「12」について
