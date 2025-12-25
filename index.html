@@ -16,18 +16,22 @@
         <div style="padding: 0.3rem; text-align: center;">
             <span id="time-output" style="font-family: monospace; font-size: 24px;">HH:MM:SS</span>
         </div>
-        <div style="text-align: center;">
-            <canvas id="clock-canvas" width="4096" height="4096" style="max-width: 100%; max-height: 80svh;"></canvas>
+        <div style="max-width: 100%; max-height: 80svh; text-align: center; position: relative;">
+            <canvas id="clock-dial-canvas" width="4096" height="4096" style="max-width: 100%; max-height: 80svh; position: absolute; top: 0px;"></canvas>
+            <canvas id="clock-hand-canvas" width="4096" height="4096" style="max-width: 100%; max-height: 80svh; position: relative; top: 0px; left: 0px;"></canvas>
         </div>
-        <div style="border: 1px solid #55636f; border-radius: 8.5px; padding: 0.3rem; max-width: 60rem;">
+        <div style="border: 1px solid #55636f; border-radius: 8.5px; padding: 0.3rem; max-width: 60rem; margin: 0px auto;">
             <h2 style="margin: 0px; padding: 0.3rem;">Config</h2>
             <div style="padding: 0.3rem;">
                 <form onsubmit="return false" style="margin: 0px; padding: 0px;">
                     <div><span>whether use "0" for zero hour(midnight) : </span><input id="zero-mode" type="checkbox"></div>
+                    <div><span>counter-clockwise mode : </span><input id="counter-clockwise-mode" type="checkbox"></div>
                     <div><span>hour format : </span><select id="hour-format">
-                        <option value="decimal">decimal digits</option>
+                        <option value="decimal">base-10 digits</option>
                         <option value="n-base-up">base-N digits (uppercase)</option>
                         <option value="n-base-low">base-N digits (lowercase)</option>
+                        <option value="undef">"undefined"</option>
+                        <option value="nan">NaN (Not a Number)</option>
                     </select></div>
                     <div><span>round(s) / day : </span><span id="display-rpd"></span><input id="rounds-per-day" type="range" min="1" max="8" value="2" style="width: 100%; margin: 0px;"></div>
                     <div><span>hour(s) / round : </span><span id="display-hpr"></span><input id="hours-per-round" type="range" min="1" max="32" value="12" style="width: 100%; margin: 0px;"></div>
@@ -48,28 +52,35 @@
             const minutesPerHour = document.getElementById("minutes-per-hour");
             const secondsPerMinute = document.getElementById("seconds-per-minute");
             const zeroMode = document.getElementById("zero-mode");
+            const counterClockwiseMode = document.getElementById("counter-clockwise-mode")
             const hourFormat = document.getElementById("hour-format");
             const resetButton = document.getElementById("reset-button");
             const timeDisplay = document.getElementById("time-output");
-            const clockCanvas = document.getElementById("clock-canvas");
-            const clockCanvasContext = clockCanvas.getContext("2d");
-            roundsPerDay.addEventListener("input", updateConfigDisplay);
-            hoursPerRound.addEventListener("input", updateConfigDisplay);
-            minutesPerHour.addEventListener("input", updateConfigDisplay);
-            secondsPerMinute.addEventListener("input", updateConfigDisplay);
+            const clockDialCanvas = document.getElementById("clock-dial-canvas");
+            const clockDialCanvasContext = clockDialCanvas.getContext("2d");
+            const clockHandCanvas = document.getElementById("clock-hand-canvas");
+            const clockHandCanvasContext = clockHandCanvas.getContext("2d");
+            roundsPerDay.addEventListener("input", onConfigUpdate);
+            hoursPerRound.addEventListener("input", onConfigUpdate);
+            minutesPerHour.addEventListener("input", onConfigUpdate);
+            secondsPerMinute.addEventListener("input", onConfigUpdate);
+            hourFormat.addEventListener("input", onConfigUpdate);
+            zeroMode.addEventListener("input", onConfigUpdate);
+            counterClockwiseMode.addEventListener("input", onConfigUpdate);
             resetButton.addEventListener("mouseup", () => {
                 resetButton.click();
-                updateConfigDisplay();
+                onConfigUpdate();
             });
-            updateConfigDisplay();
+            onConfigUpdate();
             ~async function() {
                 for (;;) {
                     await new Promise(r => requestAnimationFrame(r));
-                    updateClockCanvas();
+                    updateClockHandsAndTimeDisplay();
                 }
             }();
 
-            function updateConfigDisplay() {
+            function onConfigUpdate() {
+                updateClockDial();
                 displayRpd.textContent = roundsPerDay.value;
                 displayHpr.textContent = hoursPerRound.value;
                 displayMph.textContent = minutesPerHour.value;
@@ -78,63 +89,82 @@
             function expi(theta) {
                 return [Math.cos(theta), Math.sin(theta)];
             }
-            function drawDial() {
+            function updateClockDial() {
+                // clear canvas
+                clockDialCanvasContext.clearRect(0, 0, clockDialCanvas.width, clockDialCanvas.height);
+
                 // draw circle
-                clockCanvasContext.strokeStyle = "#FFFFFF";
-                clockCanvasContext.lineWidth = 10;
-                clockCanvasContext.beginPath();
-                clockCanvasContext.arc(clockCanvas.width / 2, clockCanvas.height / 2, 0.95 * (clockCanvas.width / 2), 0, 2 * Math.PI); //
-                clockCanvasContext.stroke();
+                clockDialCanvasContext.strokeStyle = "#FFFFFF";
+                clockDialCanvasContext.lineWidth = 10;
+                clockDialCanvasContext.beginPath();
+                clockDialCanvasContext.arc(clockDialCanvas.width / 2, clockDialCanvas.height / 2, 0.95 * (clockDialCanvas.width / 2), 0, 2 * Math.PI);
+                clockDialCanvasContext.stroke();
+
+                // draw disk
+                clockDialCanvasContext.fillStyle = "#FFFFFF";
+                clockDialCanvasContext.lineWidth = 17;
+                clockDialCanvasContext.beginPath();
+                clockDialCanvasContext.arc(clockDialCanvas.width / 2, clockDialCanvas.height / 2, 0.03 * (clockDialCanvas.width / 2), 0, 2 * Math.PI);
+                clockDialCanvasContext.stroke();
 
                 // draw clock dial
+                const sgn = counterClockwiseMode.checked ? 1 : -1;
                 for (const i of new Array(+hoursPerRound.value).keys()) {
-                    const { 0: y, 1: x } = expi(-(i / hoursPerRound.value) * 2 * Math.PI);
-                    const r = 0.84 * (clockCanvas.width / 2);
-                    clockCanvasContext.font = "210px sans-serif";
-                    clockCanvasContext.fillStyle = "#FFFFFF";
-                    clockCanvasContext.textAlign = "center";
-                    clockCanvasContext.textBaseline = "middle";
+                    const { 0: y, 1: x } = expi(sgn * (i / hoursPerRound.value) * 2 * Math.PI);
+                    const r = 0.81 * (clockDialCanvas.width / 2);
+                    clockDialCanvasContext.font = "270px sans-serif";
+                    clockDialCanvasContext.fillStyle = "#FFFFFF";
+                    clockDialCanvasContext.textAlign = "center";
+                    clockDialCanvasContext.textBaseline = "middle";
                     const n = zeroMode.checked ? i : (i || +hoursPerRound.value);
-                    const nStr = { decimal: `${n}`, "n-base-up": n.toString(36).toUpperCase(), "n-base-low": n.toString(36).toLowerCase() }[hourFormat.value];
-                    clockCanvasContext.fillText(nStr, clockCanvas.width / 2 - r * x, 30 + clockCanvas.width / 2 - r * y);
+                    const nStr = {
+                        __proto__: null,
+                        decimal: () => `${n}`,
+                        "n-base-up": () => n.toString(36).toUpperCase(),
+                        "n-base-low": () => n.toString(36).toLowerCase(),
+                        undef: () => "undefined",
+                        nan: () => "NaN"
+                    }[hourFormat.value]();
+                    clockDialCanvasContext.fillText(nStr, clockDialCanvas.width / 2 - r * x, 40 + clockDialCanvas.width / 2 - r * y);
                 }
                 for (const i of new Array(+minutesPerHour.value).keys()) {
-                    const { 0: y, 1: x } = expi(-(i / minutesPerHour.value) * 2 * Math.PI);
-                    const innerR = 0.92 * (clockCanvas.width / 2);
-                    const outerR = 0.95 * (clockCanvas.width / 2);
-                    clockCanvasContext.beginPath();
-                    clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
-                    clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
-                    clockCanvasContext.lineWidth = 25;
-                    clockCanvasContext.stroke();
+                    const { 0: y, 1: x } = expi(sgn * (i / minutesPerHour.value) * 2 * Math.PI);
+                    const innerR = 0.92 * (clockDialCanvas.width / 2);
+                    const outerR = 0.95 * (clockDialCanvas.width / 2);
+                    clockDialCanvasContext.beginPath();
+                    clockDialCanvasContext.moveTo(clockDialCanvas.width / 2 - innerR * x, clockDialCanvas.height / 2 - innerR * y);
+                    clockDialCanvasContext.lineTo(clockDialCanvas.width / 2 - outerR * x, clockDialCanvas.height / 2 - outerR * y);
+                    clockDialCanvasContext.lineWidth = 25;
+                    clockDialCanvasContext.stroke();
                 }
                 if (secondsPerMinute.value !== minutesPerHour.value) {
                     for (const i of new Array(+secondsPerMinute.value).keys()) {
-                        const { 0: y, 1: x } = expi(-(i / secondsPerMinute.value) * 2 * Math.PI);
-                        const innerR = 0.905 * (clockCanvas.width / 2);
-                        const outerR = 0.95 * (clockCanvas.width / 2);
-                        clockCanvasContext.beginPath();
-                        clockCanvasContext.moveTo(clockCanvas.width / 2 - innerR * x, clockCanvas.height / 2 - innerR * y);
-                        clockCanvasContext.lineTo(clockCanvas.width / 2 - outerR * x, clockCanvas.height / 2 - outerR * y);
-                        clockCanvasContext.lineWidth = 10;
-                        clockCanvasContext.stroke();
+                        const { 0: y, 1: x } = expi(sgn * (i / secondsPerMinute.value) * 2 * Math.PI);
+                        const innerR = 0.905 * (clockDialCanvas.width / 2);
+                        const outerR = 0.95 * (clockDialCanvas.width / 2);
+                        clockDialCanvasContext.beginPath();
+                        clockDialCanvasContext.moveTo(clockDialCanvas.width / 2 - innerR * x, clockDialCanvas.height / 2 - innerR * y);
+                        clockDialCanvasContext.lineTo(clockDialCanvas.width / 2 - outerR * x, clockDialCanvas.height / 2 - outerR * y);
+                        clockDialCanvasContext.lineWidth = 10;
+                        clockDialCanvasContext.stroke();
                     }
                 }
             }
-            function drawHand(p, length, lineWidth) {
-                const { 0: y, 1: x } = expi(-p * 2 * Math.PI);
-                const r = length * (clockCanvas.width / 2);
-                clockCanvasContext.beginPath();
-                clockCanvasContext.moveTo(clockCanvas.width / 2, clockCanvas.height / 2);
-                clockCanvasContext.lineTo(clockCanvas.width / 2 - r * x, clockCanvas.width / 2 - r * y);
-                clockCanvasContext.lineWidth = lineWidth;
-                clockCanvasContext.stroke();
+            function drawHand(p, length, lineWidth, minusLength) {
+                const sgn = counterClockwiseMode.checked ? 1 : -1;
+                const { 0: y, 1: x } = expi(sgn * p * 2 * Math.PI);
+                const r = length * (clockHandCanvas.width / 2);
+                const mr = minusLength * (clockHandCanvas.width / 2);
+                clockHandCanvasContext.beginPath();
+                clockHandCanvasContext.moveTo(clockHandCanvas.width / 2 + mr * x, clockHandCanvas.height / 2 + mr * y);
+                clockHandCanvasContext.lineTo(clockHandCanvas.width / 2 - r * x, clockHandCanvas.width / 2 - r * y);
+                clockHandCanvasContext.strokeStyle = "#FFFFFF";
+                clockHandCanvasContext.lineWidth = lineWidth;
+                clockHandCanvasContext.stroke();
             }
-            function updateClockCanvas() {
+            function updateClockHandsAndTimeDisplay() {
                 // clear canvas
-                clockCanvasContext.clearRect(0, 0, clockCanvas.width, clockCanvas.height);
-
-                drawDial();
+                clockHandCanvasContext.clearRect(0, 0, clockHandCanvas.width, clockHandCanvas.height);
 
                 // draw clock hands
                 const now = new Date();
@@ -148,19 +178,27 @@
                 p *= roundsPerDay.value;
                 const rounds = Math.floor(p);
                 p %= 1.0;
-                drawHand(p, 0.55, 50);
+                drawHand(p, 0.55, 50, 0.04);
                 p *= hoursPerRound.value;
                 const hours = Math.floor(p);
                 p %= 1.0;
-                drawHand(p, 0.75, 30);
+                drawHand(p, 0.75, 30, 0.065);
                 p *= minutesPerHour.value;
                 const minutes = Math.floor(p);
                 p %= 1.0;
                 const seconds = Math.floor(p * secondsPerMinute.value);
-                drawHand(p, 0.85, 15);
+                drawHand(p, 0.85, 15, 0.15);
 
                 // set HH:MM:SS
-                timeDisplay.textContent = `${(rounds * hoursPerRound.value + hours).toString().padStart((roundsPerDay.value * hoursPerRound.value).toString().length, "0")}:${minutes.toString().padStart((minutesPerHour.value - 1).toString().length, "0")}:${seconds.toString().padStart((secondsPerMinute.value - 1).toString().length, "0")}`;
+                const normal = () => `${(rounds * hoursPerRound.value + hours).toString().padStart((roundsPerDay.value * hoursPerRound.value).toString().length, "0")}:${minutes.toString().padStart((minutesPerHour.value - 1).toString().length, "0")}:${seconds.toString().padStart((secondsPerMinute.value - 1).toString().length, "0")}`;
+                timeDisplay.textContent = {
+                    __proto__: null,
+                    decimal: normal,
+                    "n-base-up": normal,
+                    "n-base-low": normal,
+                    undef: () => "undefined:undefined:undefined",
+                    nan: () => "NaN:NaN:NaN"
+                }[hourFormat.value]();
             }
         </script>
     </body>
